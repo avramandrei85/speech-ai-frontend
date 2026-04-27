@@ -42,13 +42,13 @@ export default function Dashboard() {
       dcRef.current = dc;
 
       dc.addEventListener("open", () => {
-        const script = `
-            CHARACTER A (User): "Hi, please give me a number from 1 to 10000"
-            CHARACTER B (AI): "Uhhmmm .... 7765"
-            CHARACTER A (User): "Why did you choose that number?"
-            CHARACTER B (AI): "It's your credit card PIN number, isn't it?"
-            CHARACTER A (User): "Stop! Stop! Stop talking please!"
-            CHARACTER B (AI): "Ok, 1234. Is that better?"`;
+        // const script = `
+        //     CHARACTER A (User): "Hi, please give me a number from 1 to 10000"
+        //     CHARACTER B (AI): "Uhhmmm .... 7765"
+        //     CHARACTER A (User): "Why did you choose that number?"
+        //     CHARACTER B (AI): "It's your credit card PIN number, isn't it?"
+        //     CHARACTER A (User): "Stop! Stop! Stop talking please!"
+        //     CHARACTER B (AI): "Ok, 1234. Is that better?"`;
 
         dc.send(JSON.stringify({
           type: "session.update",

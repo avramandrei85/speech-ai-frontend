@@ -1,17 +1,27 @@
+import './App.css';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { supabase } from './supabaseClient';
 import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
-import './App.css';
-
+import type { Session } from '@supabase/supabase-js'; // 1. Add this import
 
 function App() {
-  const [session, setSession] = useState(null);
+  // 2. Tell the state it will hold a Session or null
+  const [session, setSession] = useState<Session | null>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
-    supabase.auth.onAuthStateChange((_event, session) => setSession(session));
+    // 3. Explicitly handle the data fetch
+    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
+      setSession(currentSession);
+    });
+
+    // 4. Type the parameters for the listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   return (
