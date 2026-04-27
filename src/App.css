@@ -1,0 +1,129 @@
+#root {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  display: block; /* Overrides Vite's default flex if it's still lingering */
+}
+
+.auth-wrapper {
+  display: flex;
+  justify-content: center; /* Horizontal centering */
+  align-items: center;     /* Vertical centering */
+  min-height: 100vh;       /* Full viewport height */
+  width: 100%;             /* Full width */
+  background-color: #121212;
+  margin: 0;
+  padding: 0;
+  position: fixed;         /* Ensures it ignores any weird padding from parents */
+  top: 0;
+  left: 0;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  background: white;
+  padding: 50px;
+  border-radius: 15px;
+  width: 100%;
+  max-width: 400px;
+  box-sizing: border-box; /* Ensures padding doesn't push width over 100% */
+}
+
+/* 3. Make inputs and button look better */
+.auth-form input {
+  padding: 12px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 16px;
+}
+
+.auth-form button {
+  padding: 12px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.toggle-link {
+  text-align: center;
+  color: #007bff;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.error-text {
+  color: #ff4d4d;
+  font-size: 14px;
+  margin: -10px 0 10px 0;
+  font-weight: bold;
+}
+
+/* Dashboard Centering & Layout */
+.dashboard-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 100px;
+  min-height: 100vh;
+  background: #f4f4f9;
+  font-family: sans-serif;
+}
+
+.record-btn {
+  padding: 20px 40px;
+  font-size: 1.2rem;
+  cursor: pointer;
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  transition: 0.2s;
+}
+
+.record-btn.active {
+  background: #dc3545;
+}
+
+.status-text {
+  margin-top: 20px;
+  font-weight: bold;
+  color: #555;
+}
+
+.transcript-box {
+  margin-top: 20px;
+  padding: 20px;
+  border: 1px solid #ddd;
+  width: 80%;
+  max-width: 800px;
+  min-height: 150px;
+  border-radius: 8px;
+  background: white;
+  line-height: 1.6;
+  text-align: left;
+}
+
+.logout-btn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  padding: 10px 20px;
+  background: #6c757d; /* A neutral gray */
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.2s;
+}
+
+.logout-btn:hover {
+  background: #495057; /* Darken slightly on hover */
+}
