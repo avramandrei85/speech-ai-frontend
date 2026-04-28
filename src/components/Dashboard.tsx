@@ -140,10 +140,14 @@ useEffect(() => {
     setStatus("Connected & Listening");
 
   } catch (err) {
-    console.error("Session Error:", err);
-    setStatus(`Error: ${err.message}`);
-    stopSession();
-  }
+  console.error("Session Error:", err);
+  
+  // This line satisfies TS18046 by checking the type
+  const errorMessage = err instanceof Error ? err.message : String(err);
+  
+  setStatus(`Error: ${errorMessage}`);
+  stopSession();
+}
 }
 
   function stopSession() {
