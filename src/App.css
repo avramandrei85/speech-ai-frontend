@@ -127,3 +127,22 @@
 .logout-btn:hover {
   background: #495057; /* Darken slightly on hover */
 }
+
+.video-container {
+  width: 100%;
+  max-width: 600px;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  border: 2px solid #007bff; /* Blue frame to show it's "Active" */
+}
+
+.webcam-feed {
+  width: 100%;
+  height: 100%;
+  object-fit: cover; /* Fills the frame nicely */
+  transform: scaleX(-1); /* Mirrors the video so it feels natural to you */
+}

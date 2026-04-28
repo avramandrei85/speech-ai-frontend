@@ -1,5 +1,5 @@
 // src/components/Dashboard.tsx
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 
 export default function Dashboard() {
@@ -10,8 +10,61 @@ export default function Dashboard() {
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const LOCAL_SERVER_URL = 'https://speech-ai-zeta.vercel.app/session';
+
+  //const LOCAL_SERVER_URL = 'http://localhost:3000/session';
+
+  // Inside src/components/Dashboard.tsx
+
+const sendVideoFrame = () => {
+  if (!videoRef.current || !dcRef.current || dcRef.current.readyState !== "open") return;
+
+  const canvas = document.createElement("canvas");
+  // Lower resolution = Faster response
+  canvas.width = 512; 
+  canvas.height = 512;
+  
+  const ctx = canvas.getContext("2d");
+  if (ctx) {
+    ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+    
+    // Convert to Base64
+    const base64Image = canvas.toDataURL("image/jpeg", 0.6).split(",")[1];
+
+    // Send to AI via the Data Channel
+    const event = {
+      type: "conversation.item.create",
+      item: {
+        type: "message",
+        role: "user",
+        content: [
+          {
+            type: "input_image",
+            image: base64Image
+          }
+        ]
+      }
+    };
+    
+    dcRef.current.send(JSON.stringify(event));
+    
+    // Also trigger a "response" so the AI acknowledges what it just saw
+    dcRef.current.send(JSON.stringify({ type: "response.create" }));
+  }
+};
+
+// Start the timer when the session begins
+useEffect(() => {
+  let timer: number;
+  if (isActive) {
+    timer = window.setInterval(sendVideoFrame, 2000); // Send a frame every 2 seconds
+  }
+  return () => clearInterval(timer);
+}, [isActive]);
+
+
 
   const handleLogout = async () => {
     const { error } = await supabase.auth.signOut();
@@ -33,9 +86,17 @@ export default function Dashboard() {
       pc.ontrack = (e) => audioEl.srcObject = e.streams[0];
 
       // 2. Setup Your Mic
-      const localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const localStream = await navigator.mediaDevices.getUserMedia({ 
+      audio: true, 
+      video: { width: 1280, height: 720 } // Quality control
+    });
       streamRef.current = localStream;
-      pc.addTrack(localStream.getTracks()[0]);
+
+      if (videoRef.current) {
+      videoRef.current.srcObject = localStream;
+    }
+
+      localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
 
       // 3. Data Channel Setup
       const dc = pc.createDataChannel("oai-events");
@@ -53,8 +114,7 @@ export default function Dashboard() {
         dc.send(JSON.stringify({
           type: "session.update",
           session: {
-            type: "realtime",
-            instructions: `Always speak english.`
+            type: "realtime"
           }
         }));
       });
@@ -113,6 +173,16 @@ export default function Dashboard() {
         className="transcript-box" 
         dangerouslySetInnerHTML={{ __html: transcript }} 
       />
+      <div className="video-container">
+              <video 
+                ref={videoRef} 
+                autoPlay 
+                playsInline 
+                muted 
+                className="webcam-feed" 
+              />
+        </div>
     </div>
+    
   );
 }
