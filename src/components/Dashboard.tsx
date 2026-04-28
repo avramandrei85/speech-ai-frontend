@@ -6,6 +6,8 @@ export default function Dashboard() {
   const [isActive, setIsActive] = useState(false);
   const [status, setStatus] = useState("Ready");
   const [transcript, setTranscript] = useState("AI Transcript will appear here...");
+  const [isVideoEnabled, setIsVideoEnabled] = useState(true);
+
   
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
@@ -19,39 +21,27 @@ export default function Dashboard() {
   // Inside src/components/Dashboard.tsx
 
 const sendVideoFrame = () => {
-  if (!videoRef.current || !dcRef.current || dcRef.current.readyState !== "open") return;
+  if (!videoRef.current || !dcRef.current || dcRef.current.readyState !== "open" || !isVideoEnabled) return;
 
   const canvas = document.createElement("canvas");
-  // Lower resolution = Faster response
-  canvas.width = 512; 
-  canvas.height = 512;
-  
+  canvas.width = 612; 
+  canvas.height = 612;
   const ctx = canvas.getContext("2d");
+
   if (ctx) {
     ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-    
-    // Convert to Base64
     const base64Image = canvas.toDataURL("image/jpeg", 0.6).split(",")[1];
 
-    // Send to AI via the Data Channel
-    const event = {
+    // 1. Send the image as a conversation item (SILENT)
+    dcRef.current.send(JSON.stringify({
       type: "conversation.item.create",
       item: {
         type: "message",
         role: "user",
-        content: [
-          {
-            type: "input_image",
-            image: base64Image
-          }
-        ]
+        content: [{ type: "input_image", image: base64Image }]
       }
-    };
-    
-    dcRef.current.send(JSON.stringify(event));
-    
-    // Also trigger a "response" so the AI acknowledges what it just saw
-    dcRef.current.send(JSON.stringify({ type: "response.create" }));
+    }));
+
   }
 };
 
@@ -71,84 +61,90 @@ useEffect(() => {
     if (error) console.error("Error logging out:", error.message);
   };
 
+ 
   async function startSession() {
-    setIsActive(true);
-    setStatus("Connecting...");
-    setTranscript(""); // Clear placeholder
+  setIsActive(true);
+  setStatus("Connecting...");
 
-    try {
-      const pc = new RTCPeerConnection();
-      pcRef.current = pc;
+  try {
+    // 1. Get the Ephemeral Token from YOUR backend
+    const tokenResponse = await fetch(LOCAL_SERVER_URL, { method: 'POST' });
+    const sessionData = await tokenResponse.json();
+    const EPHEMERAL_KEY = sessionData.client_secret.value;
 
-      // 1. Setup AI Voice Output
-      const audioEl = document.createElement("audio");
-      audioEl.autoplay = true;
-      pc.ontrack = (e) => audioEl.srcObject = e.streams[0];
+    // 2. Setup the Peer Connection
+    const pc = new RTCPeerConnection();
+    pcRef.current = pc;
 
-      // 2. Setup Your Mic
-      const localStream = await navigator.mediaDevices.getUserMedia({ 
+    // 3. Audio & Video Setup
+    const audioEl = document.createElement("audio");
+    audioEl.autoplay = true;
+    pc.ontrack = (e) => audioEl.srcObject = e.streams[0];
+
+    const localStream = await navigator.mediaDevices.getUserMedia({ 
       audio: true, 
-      video: { width: 1280, height: 720 } // Quality control
+      video: { width: 640, height: 480 } 
     });
-      streamRef.current = localStream;
+    streamRef.current = localStream;
+    if (videoRef.current) videoRef.current.srcObject = localStream;
+    localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
 
-      if (videoRef.current) {
-      videoRef.current.srcObject = localStream;
+    // 4. Data Channel for Paparazzi & Transcripts
+    const dc = pc.createDataChannel("oai-events");
+    dcRef.current = dc;
+    dc.onmessage = (event) => {
+              const data = JSON.parse(event.data);
+
+              // 1. Handle USER transcript (What you said)
+              // if (data.type === "conversation.item.input_audio_transcription.completed") {
+              //   setTranscript(prev => prev + `\n\nYou: ${data.transcript}`);
+              // }
+
+              // 2. Handle AI transcript (What the AI said)
+              // The AI sends text in "deltas" (tiny chunks) as it speaks
+              if (data.type === "response.audio_transcript.delta") {
+                setTranscript(prev => prev + data.delta);
+              }
+
+              // 3. Handle AI response DONE (Add a new line for the next part)
+              if (data.type === "response.audio_transcript.done") {
+                setTranscript(prev => prev + "\n");
+              }
+
+              // Debug: Log all events so you can see them in the console
+              console.log("AI Event:", data.type, data);
+            };
+
+    // 5. THE HANDSHAKE (Talking directly to OpenAI)
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+
+    const sdpResponse = await fetch(`https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview`, {
+      method: "POST",
+      body: offer.sdp,
+      headers: {
+        Authorization: `Bearer ${EPHEMERAL_KEY}`,
+        "Content-Type": "application/sdp",
+      },
+    });
+
+    if (!sdpResponse.ok) {
+        const errText = await sdpResponse.text();
+        throw new Error(`OpenAI SDP Error: ${errText}`);
     }
 
-      localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+    const answerSdp = await sdpResponse.text();
+    const answer = { type: "answer" as RTCSdpType, sdp: answerSdp };
+    await pc.setRemoteDescription(answer);
 
-      // 3. Data Channel Setup
-      const dc = pc.createDataChannel("oai-events");
-      dcRef.current = dc;
+    setStatus("Connected & Listening");
 
-      dc.addEventListener("open", () => {
-        // const script = `
-        //     CHARACTER A (User): "Hi, please give me a number from 1 to 10000"
-        //     CHARACTER B (AI): "Uhhmmm .... 7765"
-        //     CHARACTER A (User): "Why did you choose that number?"
-        //     CHARACTER B (AI): "It's your credit card PIN number, isn't it?"
-        //     CHARACTER A (User): "Stop! Stop! Stop talking please!"
-        //     CHARACTER B (AI): "Ok, 1234. Is that better?"`;
-
-        dc.send(JSON.stringify({
-          type: "session.update",
-          session: {
-            type: "realtime"
-          }
-        }));
-      });
-
-      dc.addEventListener("message", (e) => {
-        const event = JSON.parse(e.data);
-        if (event.type === 'session.updated') setStatus("Connected & Listening");
-        
-        if (event.type === 'response.output_audio_transcript.delta') {
-          setTranscript(prev => prev + event.delta);
-        }
-        if (event.type === 'conversation.item.input_audio_transcription.completed') {
-          setTranscript(prev => prev + `<br><br><b style="color: #007bff;">You:</b> ${event.transcript}<br><b style="color: #28a745;">AI:</b> `);
-        }
-      });
-
-      // 4. Handshake
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-
-      const sdpResponse = await fetch(LOCAL_SERVER_URL, {
-        method: 'POST',
-        body: offer.sdp,
-        headers: { 'Content-Type': 'application/sdp' }
-      });
-
-      const answer = { type: "answer" as RTCSdpType, sdp: await sdpResponse.text() };
-      await pc.setRemoteDescription(answer);
-
-    } catch (err) {
-      console.error(err);
-      stopSession();
-    }
+  } catch (err) {
+    console.error("Session Error:", err);
+    setStatus(`Error: ${err.message}`);
+    stopSession();
   }
+}
 
   function stopSession() {
     setIsActive(false);
@@ -173,6 +169,23 @@ useEffect(() => {
         className="transcript-box" 
         dangerouslySetInnerHTML={{ __html: transcript }} 
       />
+      <div className="controls">
+        <button 
+          onClick={() => setIsVideoEnabled(!isVideoEnabled)}
+          style={{
+            backgroundColor: isVideoEnabled ? "#28a745" : "#dc3545",
+            color: "white",
+            padding: "10px 20px",
+            borderRadius: "8px",
+            border: "none",
+            cursor: "pointer",
+            fontWeight: "bold",
+            transition: "0.3s"
+          }}
+        >
+          {isVideoEnabled ? "📷 AI Eyes: ON" : "🙈 AI Eyes: OFF"}
+        </button>
+</div>
       <div className="video-container">
               <video 
                 ref={videoRef} 
@@ -180,6 +193,7 @@ useEffect(() => {
                 playsInline 
                 muted 
                 className="webcam-feed" 
+                style={{ filter: isVideoEnabled ? "none" : "grayscale(100%) blur(5px)" }}
               />
         </div>
     </div>
