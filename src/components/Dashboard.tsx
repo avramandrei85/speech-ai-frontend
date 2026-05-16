@@ -18,7 +18,7 @@ export default function Dashboard() {
   // FIXED: Added the 'authToken' variable to the state hook
   const [authToken, setAuthToken] = useState<string | null>(null);
 
-  const LOCAL_SERVER_URL = 'https://speech-ai-zeta.vercel.app//session';
+  const LOCAL_SERVER_URL = 'https://speech-ai-zeta.vercel.app/session';
 
   useEffect(() => {
     const createUserProfileIfNeeded = async () => {
