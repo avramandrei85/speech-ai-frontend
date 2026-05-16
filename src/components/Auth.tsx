@@ -5,6 +5,8 @@ import { useNavigate } from 'react-router-dom';
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState(''); // <--- New State
@@ -14,25 +16,51 @@ export default function Auth() {
     e.preventDefault();
     setErrorMsg(''); // Clear previous errors
 
-    const { error } = isLogin 
-      ? await supabase.auth.signInWithPassword({ email, password })
-      : await supabase.auth.signUp({ email, password });
+    if (isLogin) {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+      if (error) {
+        setErrorMsg(error.message);
+      } else {
+        navigate('/dashboard');
+      }
+
+      return;
+    }
+
+    const { data, error } = await supabase.auth.signUp({ 
+      email, 
+      password,
+      options: {
+        data: {
+          first_name: firstName,
+          last_name: lastName,
+        }
+      }
+    });
+
 
     if (error) {
-      setErrorMsg(error.message); // Set red text instead of alert
-    } else if (isLogin) {
-      navigate('/dashboard');
-    } else {
-      setErrorMsg('Check your email for confirmation!');
+      setErrorMsg(error.message);
+      return;
     }
+
+    setErrorMsg('Signup successful! Please check your email to confirm your account.');
+    // Do not navigate; user needs to confirm email first
   };
 
   return (
     <div className="auth-wrapper">
       <form onSubmit={handleAuth} className="auth-form">
         <h2>{isLogin ? 'Login' : 'Sign Up'}</h2>
-        <input type="email" placeholder="Email" onChange={(e) => setEmail(e.target.value)} required />
-        <input type="password" placeholder="Password" onChange={(e) => setPassword(e.target.value)} required />
+        {!isLogin && (
+          <>
+            <input type="text" placeholder="First Name" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
+            <input type="text" placeholder="Last Name" value={lastName} onChange={(e) => setLastName(e.target.value)} required />
+          </>
+        )}
+        <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
         
         {/* RED ERROR TEXT */}
         {errorMsg && <p className="error-text">{errorMsg}</p>}

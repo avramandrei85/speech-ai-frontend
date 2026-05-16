@@ -1,206 +1,209 @@
-// src/components/Dashboard.tsx
 import { useState, useRef, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
+import DashboardNav from './DashboardNav';
+import AIAgentPanel from './AIAgentPanel';
+import AboutPanel from './AboutPanel';
 
 export default function Dashboard() {
   const [isActive, setIsActive] = useState(false);
-  const [status, setStatus] = useState("Ready");
-  const [transcript, setTranscript] = useState("AI Transcript will appear here...");
-  const [isVideoEnabled, setIsVideoEnabled] = useState(true);
+  const [status, setStatus] = useState('Ready');
+  const [transcript, setTranscript] = useState('AI Transcript will appear here...');
+  const [activeTab, setActiveTab] = useState<'ai' | 'about'>('ai');
 
-  
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [visualization, setVisualization] = useState<string | null>(null);
 
-  const LOCAL_SERVER_URL = 'https://speech-ai-zeta.vercel.app/session';
+  // FIXED: Added the 'authToken' variable to the state hook
+  const [authToken, setAuthToken] = useState<string | null>(null);
 
-  //const LOCAL_SERVER_URL = 'http://localhost:3000/session';
+  const LOCAL_SERVER_URL = 'http://localhost:3000/session';
 
-  // Inside src/components/Dashboard.tsx
+  useEffect(() => {
+    const createUserProfileIfNeeded = async () => {
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session || !session.user) return;
 
-const sendVideoFrame = () => {
-  if (!videoRef.current || !dcRef.current || dcRef.current.readyState !== "open" || !isVideoEnabled) return;
+      const user = session.user;
+      const token = session.access_token;
 
-  const canvas = document.createElement("canvas");
-  canvas.width = 612; 
-  canvas.height = 612;
-  const ctx = canvas.getContext("2d");
+      setAuthToken(token);
 
-  if (ctx) {
-    ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-    const base64Image = canvas.toDataURL("image/jpeg", 0.6).split(",")[1];
+      const { data: existingUser, error: fetchError } = await supabase
+        .from('users_auth')
+        .select('id')
+        .eq('auth_id', user.id)
+        .single();
 
-    // 1. Send the image as a conversation item (SILENT)
-    dcRef.current.send(JSON.stringify({
-      type: "conversation.item.create",
-      item: {
-        type: "message",
-        role: "user",
-        content: [{ type: "input_image", image: base64Image }]
-      }
-    }));
+      if (existingUser || (fetchError && fetchError.code !== 'PGRST116')) return;
 
-  }
-};
+      const firstName = user.user_metadata?.first_name;
+      const lastName = user.user_metadata?.last_name;
+      if (!firstName || !lastName) return;
 
-// Start the timer when the session begins
-useEffect(() => {
-  let timer: number;
-  if (isActive) {
-    timer = window.setInterval(sendVideoFrame, 2000); // Send a frame every 2 seconds
-  }
-  return () => clearInterval(timer);
-}, [isActive]);
+      await supabase.from('users_auth').insert([{
+        first_name: firstName,
+        last_name: lastName,
+        email: user.email,
+        auth_id: user.id,
+      }]);
+    };
 
-
+    createUserProfileIfNeeded();
+  }, []);
 
   const handleLogout = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) console.error("Error logging out:", error.message);
+    await supabase.auth.signOut();
   };
 
- 
   async function startSession() {
-  setIsActive(true);
-  setStatus("Connecting...");
+    setIsActive(true);
+    setStatus('Connecting...');
 
-  try {
-    // 1. Get the Ephemeral Token from YOUR backend
-    const tokenResponse = await fetch(LOCAL_SERVER_URL, { method: 'POST' });
-    const sessionData = await tokenResponse.json();
-    const EPHEMERAL_KEY = sessionData.client_secret.value;
+    try {
+      const tokenResponse = await fetch(LOCAL_SERVER_URL, { method: 'POST' });
+      const sessionData = await tokenResponse.json();
+      const EPHEMERAL_KEY = sessionData.client_secret.value;
 
-    // 2. Setup the Peer Connection
-    const pc = new RTCPeerConnection();
-    pcRef.current = pc;
+      const pc = new RTCPeerConnection();
+      pcRef.current = pc;
 
-    // 3. Audio & Video Setup
-    const audioEl = document.createElement("audio");
-    audioEl.autoplay = true;
-    pc.ontrack = (e) => audioEl.srcObject = e.streams[0];
+      const audioEl = document.createElement('audio');
+      audioEl.autoplay = true;
+      pc.ontrack = (e) => { audioEl.srcObject = e.streams[0]; };
 
-    const localStream = await navigator.mediaDevices.getUserMedia({ 
-      audio: true, 
-      video: { width: 640, height: 480 } 
-    });
-    streamRef.current = localStream;
-    if (videoRef.current) videoRef.current.srcObject = localStream;
-    localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+      const localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = localStream;
+      localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
 
-    // 4. Data Channel for Paparazzi & Transcripts
-    const dc = pc.createDataChannel("oai-events");
-    dcRef.current = dc;
-    dc.onmessage = (event) => {
-              const data = JSON.parse(event.data);
+      const dc = pc.createDataChannel('oai-events');
+      dcRef.current = dc;
 
-              // 1. Handle USER transcript (What you said)
-              // if (data.type === "conversation.item.input_audio_transcription.completed") {
-              //   setTranscript(prev => prev + `\n\nYou: ${data.transcript}`);
-              // }
+      dc.onmessage = async (event) => {
+        const data = JSON.parse(event.data);
 
-              // 2. Handle AI transcript (What the AI said)
-              // The AI sends text in "deltas" (tiny chunks) as it speaks
-              if (data.type === "response.audio_transcript.delta") {
-                setTranscript(prev => prev + data.delta);
-              }
+        if (data.type === 'response.audio_transcript.delta') {
+          setTranscript((prev) => prev + data.delta);
+        }
+        if (data.type === 'response.audio_transcript.done') {
+          setTranscript((prev) => prev + '\n');
+        }
 
-              // 3. Handle AI response DONE (Add a new line for the next part)
-              if (data.type === "response.audio_transcript.done") {
-                setTranscript(prev => prev + "\n");
-              }
+        if (data.type === 'response.done') {
+          const functionCall = data.response.output?.find(
+            (output: any) => output.type === 'function_call'
+          );
 
-              // Debug: Log all events so you can see them in the console
-              console.log("AI Event:", data.type, data);
-            };
+          if (functionCall && functionCall.name === 'get_users_list') {
+                    try {
+                      const { data: { session } } = await supabase.auth.getSession();
+                      const token = session?.access_token;
 
-    // 5. THE HANDSHAKE (Talking directly to OpenAI)
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
+                      const response = await fetch("http://localhost:3000/api/user-trainings", {
+                        method: "GET",
+                        headers: {
+                          "Authorization": `Bearer ${token}`,
+                          "Content-Type": "application/json"
+                        }
+                      });
 
-    const sdpResponse = await fetch(`https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview`, {
-      method: "POST",
-      body: offer.sdp,
-      headers: {
-        Authorization: `Bearer ${EPHEMERAL_KEY}`,
-        "Content-Type": "application/sdp",
-      },
-    });
+                      const usersData = await response.json();
 
-    if (!sdpResponse.ok) {
-        const errText = await sdpResponse.text();
-        throw new Error(`OpenAI SDP Error: ${errText}`);
+                      // 1. GENERATE RAW HTML TABLE
+                      const htmlTable = `
+                        <div class="data-table-container">
+                          <h3>User Directory</h3>
+                          <table class="custom-dashboard-table">
+                            <thead>
+                              <tr>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Role</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              ${usersData.map((user: any) => `
+                                <tr>
+                                  <td>${user.first_name} ${user.last_name}</td>
+                                  <td>${user.email}</td>
+                                  <td><span class="role-badge">${user.job_role || 'N/A'}</span></td>
+                                </tr>
+                              `).join('')}
+                            </tbody>
+                          </table>
+                        </div>
+                      `;
+
+                      // 2. SET THE VISUALIZATION STATE
+                      setVisualization(htmlTable);
+
+                      // 3. (Optional) Still add a small note to transcript so user knows where to look
+                      setTranscript(prev => prev + "\n[Sistem: Tabel generat în panoul lateral]\n");
+
+                      // 4. RESPOND TO AI
+                      dc.send(JSON.stringify({
+                        type: 'conversation.item.create',
+                        item: {
+                          type: 'function_call_output',
+                          call_id: functionCall.call_id,
+                          output: JSON.stringify(usersData),
+                        },
+                      }));
+                      dc.send(JSON.stringify({ type: 'response.create' }));
+
+                    } catch (error) {
+                      console.error("Tool Error:", error);
+                    }
+                  }
+        }
+      };
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      const sdpResponse = await fetch('https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview', {
+        method: 'POST',
+        body: offer.sdp,
+        headers: {
+          Authorization: `Bearer ${EPHEMERAL_KEY}`,
+          'Content-Type': 'application/sdp',
+        },
+      });
+
+      const answerSdp = await sdpResponse.text();
+      await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
+      setStatus('Connected & Listening');
+    } catch (err) {
+      stopSession();
     }
-
-    const answerSdp = await sdpResponse.text();
-    const answer = { type: "answer" as RTCSdpType, sdp: answerSdp };
-    await pc.setRemoteDescription(answer);
-
-    setStatus("Connected & Listening");
-
-  } catch (err) {
-  console.error("Session Error:", err);
-  
-  // This line satisfies TS18046 by checking the type
-  const errorMessage = err instanceof Error ? err.message : String(err);
-  
-  setStatus(`Error: ${errorMessage}`);
-  stopSession();
-}
-}
+  }
 
   function stopSession() {
     setIsActive(false);
-    setStatus("Ready");
+    setStatus('Ready');
     if (pcRef.current) pcRef.current.close();
-    if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
+    if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
   }
+
+  const handleSessionToggle = () => {
+    isActive ? stopSession() : startSession();
+  };
 
   return (
     <div className="dashboard-container">
-      <button className="logout-btn" onClick={handleLogout}>
-        Logout
-      </button>
-      <button 
-        className={`record-btn ${isActive ? 'active' : ''}`}
-        onClick={isActive ? stopSession : startSession}
-      >
-        {isActive ? "Stop Conversation" : "Start Conversation"}
-      </button>
-      <p className="status-text">Status: {status}</p>
-      <div 
-        className="transcript-box" 
-        dangerouslySetInnerHTML={{ __html: transcript }} 
-      />
-      <div className="controls">
-        <button 
-          onClick={() => setIsVideoEnabled(!isVideoEnabled)}
-          style={{
-            backgroundColor: isVideoEnabled ? "#28a745" : "#dc3545",
-            color: "white",
-            padding: "10px 20px",
-            borderRadius: "8px",
-            border: "none",
-            cursor: "pointer",
-            fontWeight: "bold",
-            transition: "0.3s"
-          }}
-        >
-          {isVideoEnabled ? "📷 AI Eyes: ON" : "🙈 AI Eyes: OFF"}
-        </button>
-</div>
-      <div className="video-container">
-              <video 
-                ref={videoRef} 
-                autoPlay 
-                playsInline 
-                muted 
-                className="webcam-feed" 
-                style={{ filter: isVideoEnabled ? "none" : "grayscale(100%) blur(5px)" }}
+      <DashboardNav activeTab={activeTab} onTabChange={setActiveTab} onLogout={handleLogout} />
+      {activeTab === 'ai' ? (
+       <AIAgentPanel
+            isActive={isActive}
+            status={status}
+            transcript={transcript}
+            visualization={visualization} 
+            onSessionToggle={handleSessionToggle}
               />
-        </div>
+      ) : (
+        <AboutPanel />
+      )}
     </div>
-    
   );
 }
