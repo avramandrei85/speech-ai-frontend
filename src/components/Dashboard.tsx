@@ -18,7 +18,7 @@ export default function Dashboard() {
   // FIXED: Added the 'authToken' variable to the state hook
   const [authToken, setAuthToken] = useState<string | null>(null);
 
-  const LOCAL_SERVER_URL = 'http://localhost:3000/session';
+  const LOCAL_SERVER_URL = 'https://speech-ai-zeta.vercel.app//session';
 
   useEffect(() => {
     const createUserProfileIfNeeded = async () => {
@@ -100,7 +100,7 @@ export default function Dashboard() {
                       const { data: { session } } = await supabase.auth.getSession();
                       const token = session?.access_token;
 
-                      const response = await fetch("http://localhost:3000/api/user-trainings", {
+                      const response = await fetch("https://speech-ai-zeta.vercel.app/api/user-trainings", {
                         method: "GET",
                         headers: {
                           "Authorization": `Bearer ${token}`,
