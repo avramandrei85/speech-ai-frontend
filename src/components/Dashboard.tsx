@@ -24,7 +24,7 @@ export default function Dashboard() {
     const createUserProfileIfNeeded = async () => {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || !session || !session.user) return;
-
+      console.log(authToken)
       const user = session.user;
       const token = session.access_token;
 
