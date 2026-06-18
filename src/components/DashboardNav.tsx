@@ -1,26 +1,41 @@
 type DashboardNavProps = {
-  activeTab: 'ai' | 'about';
-  onTabChange: (tab: 'ai' | 'about') => void;
+  activeTab: "chatbot" | "ai" | "about" | "orders";
+  onTabChange: (tab: "chatbot" | "ai" | "about" | "orders") => void;
   onLogout: () => void;
 };
 
-export default function DashboardNav({ activeTab, onTabChange, onLogout }: DashboardNavProps) {
+export default function DashboardNav({
+  activeTab,
+  onTabChange,
+  onLogout,
+}: DashboardNavProps) {
   return (
     <nav className="dashboard-nav">
       <div className="nav-left">
-        <div className="nav-title">AI Dashboard</div>
         <div className="nav-tabs">
-          <button
-            className={`dashboard-tab ${activeTab === 'ai' ? 'active' : ''}`}
-            onClick={() => onTabChange('ai')}
+          {/* <button
+            className={`dashboard-tab ${activeTab === "ai" ? "active" : ""}`}
+            onClick={() => onTabChange("ai")}
           >
             My AI Agent
-          </button>
-          <button
+          </button> */}
+          {/* <button
             className={`dashboard-tab ${activeTab === 'about' ? 'active' : ''}`}
             onClick={() => onTabChange('about')}
           >
             About Me
+          </button> */}
+          <button
+            className={`dashboard-tab ${activeTab === "chatbot" ? "active" : ""}`}
+            onClick={() => onTabChange("chatbot")}
+          >
+            Chatbot
+          </button>
+          <button
+            className={`dashboard-tab ${activeTab === "orders" ? "active" : ""}`}
+            onClick={() => onTabChange("orders")}
+          >
+            Orders
           </button>
         </div>
       </div>
