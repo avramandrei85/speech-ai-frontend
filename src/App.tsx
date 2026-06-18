@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
 import Auth from "./components/Auth";
 import Dashboard from "./components/Dashboard";
-import DashboardWithTable from "./pages/DashboardWithTable";
-import ViewOrders from "./pages/ViewOrders";
+// import DashboardWithTable from "./pages/DashboardWithTable";
+// import ViewOrders from "./pages/ViewOrders";
 import Chatbot from "./components/chatbot";
 import type { Session } from "@supabase/supabase-js"; // 1. Add this import
 

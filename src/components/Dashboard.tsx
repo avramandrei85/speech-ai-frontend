@@ -7,8 +7,8 @@ import Orders from "./orders";
 // src/main.ts
 import {
   getAvailableHours,
-  type BusySlot,
-  type DailyAvailability,
+  // type BusySlot,
+  // type DailyAvailability,
 } from "../functions/getAvailability";
 
 export default function Dashboard({
